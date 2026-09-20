@@ -5,6 +5,8 @@ This is an experimental source patch with user-reported success for LMU eye alig
 
 The current source identifies as **LMU-experiment-2**. It keeps the original eye-target fix and adds [menu diagnostics](LMU-menu-diagnostics.md). The confirmed Windows build and user-reported eye-alignment result below refer to **LMU-experiment-1**; experiment 2 requires its own build and runtime validation.
 
+The menu symptom has now been clarified: its right-eye copy is present but displaced far left, with only an edge visible. Adjusting the separate legacy-menu offset and inspecting the logged layout are the next placement checks.
+
 ## Reason for this experiment
 
 On PSVR2, native-OpenXR LMU with Toolkit 1.3.2 has a gaze-following right-eye foveation region displaced far to the right. Left-eye alignment is correct. Calibration did not change the symptom, and PimaxMagic4All is correctly aligned through OpenVR. Disabling LMU VR FOV scaling was necessary to activate Toolkit foveation. Turning 4x MSAA off **did not change the offset**, so an MSAA-specific explanation is insufficient. The user's preferred configuration uses 4x MSAA.

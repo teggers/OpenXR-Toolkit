@@ -2,7 +2,11 @@
 
 This build keeps the eye-target mapping that the user reports fixes both-eye gaze alignment in native OpenXR LMU. It adds bounded ordinary-log diagnostics for the left-eye-only Toolkit menu. It is **not a confirmed menu fix**.
 
-The Companion visibility control, an explicit native-profile `menu_eye=0`, and switching the legacy menu option have not resolved the reported symptom. The exact direction of the legacy-menu switch and the FPS overlay's right-eye visibility are not yet confirmed.
+The Companion visibility control, an explicit native-profile `menu_eye=0`, and switching the legacy menu option have not resolved the reported symptom. The user subsequently clarified that the **right-eye menu is present but displaced far left**, with only its edge visible. The exact direction of the legacy-menu switch and the FPS overlay's right-eye visibility are not yet confirmed.
+
+## Placement check with the existing DLL
+
+With **Use legacy menu → Yes**, decrease **Menu eye offset** in steps of 250 pixels (for example, 0 → -250 → -500). Toolkit subtracts this value from its computed right-eye position, so decreasing it moves that menu to the right. Record the initial and final values. This setting affects menu/overlay placement, not gaze or the foveation masks. If the control cannot produce comfortable alignment, restore the initial value and capture the diagnostic log below. No automatic correction or exact offset has been established yet.
 
 ## Install and capture one short run
 
