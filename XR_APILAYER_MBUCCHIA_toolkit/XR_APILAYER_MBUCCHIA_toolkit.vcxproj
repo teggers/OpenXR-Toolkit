@@ -242,6 +242,7 @@ $(SolutionDir)\patches\sed.exe -i "s/VALUE \"ProductVersion\", \".*\"$/VALUE \"P
     <ClInclude Include="framework\dispatch.gen.h" />
     <ClInclude Include="framework\dispatch.h" />
     <ClInclude Include="interfaces.h" />
+    <ClInclude Include="eye_target_tracker.h" />
     <ClInclude Include="layer.h" />
     <ClInclude Include="log.h" />
     <ClInclude Include="pch.h" />

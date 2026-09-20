@@ -2273,7 +2273,7 @@ namespace {
                                                               m_dsvHeap,
                                                               m_rvHeap);
 
-            INVOKE_EVENT(copyTextureEvent, wrappedContext, source, destination, SrcSubresource, DstSubresource);
+            INVOKE_EVENT(copyTextureEvent, wrappedContext, source, destination, SrcSubresource, DstSubresource, false, false);
         }
 
 #undef INVOKE_EVENT

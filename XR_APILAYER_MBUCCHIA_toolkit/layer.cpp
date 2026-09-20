@@ -210,6 +210,8 @@ namespace {
             // textures anyways.
             m_configManager->setDefault("disable_frame_analyzer",
                                         m_isOpenComposite || m_applicationName == "DCS World");
+            // Per-application opt-in. 0: stock, 1: observe, 2: use learned eye targets.
+            m_configManager->setDefault("lmu_eye_target_mode", 0);
             m_configManager->setDefault("canting", 0);
             m_configManager->setDefault("vrs_capture", 0);
             m_configManager->setDefault("force_vprt_path", 0);
@@ -784,6 +786,13 @@ namespace {
                                     }
                                 }
                                 if (m_variableRateShader) {
+                                    if (m_frameAnalyzer && m_frameAnalyzer->requiresKnownEye() &&
+                                        !m_frameAnalyzer->getEyeHint().has_value()) {
+                                        // Unknown ownership must not fall back to the static Both mask or
+                                        // leave the previous render target's eye mask active.
+                                        m_variableRateShader->onUnsetRenderTarget(context);
+                                        return;
+                                    }
                                     if (m_variableRateShader->onSetRenderTarget(
                                             context,
                                             renderTarget,
@@ -809,13 +818,16 @@ namespace {
                                                                        std::shared_ptr<graphics::ITexture> source,
                                                                        std::shared_ptr<graphics::ITexture> destination,
                                                                        int sourceSlice,
-                                                                       int destinationSlice) {
+                                                                       int destinationSlice,
+                                                                       bool wholeImage,
+                                                                       bool resolve) {
                             if (!m_isInFrame) {
                                 return;
                             }
 
                             if (m_frameAnalyzer) {
-                                m_frameAnalyzer->onCopyTexture(source, destination, sourceSlice, destinationSlice);
+                                m_frameAnalyzer->onCopyTexture(
+                                    source, destination, sourceSlice, destinationSlice, wholeImage, resolve);
                             }
                         });
                     }
@@ -1232,6 +1244,9 @@ namespace {
                 }
             }
 
+            if (m_frameAnalyzer) {
+                m_frameAnalyzer->unregisterColorSwapchain(swapchain);
+            }
             const XrResult result = OpenXrApi::xrDestroySwapchain(swapchain);
             if (XR_SUCCEEDED(result)) {
                 m_swapchains.erase(swapchain);
@@ -2735,7 +2750,13 @@ namespace {
                         if (m_frameAnalyzer && !useTextureArrays && !swapchainState.registeredWithFrameAnalyzer) {
                             for (const auto& image : swapchainState.images) {
                                 m_frameAnalyzer->registerColorSwapchainImage(
-                                    view.subImage.swapchain, image.appTexture, (utilities::Eye)eye);
+                                    view.subImage.swapchain,
+                                    image.appTexture,
+                                    (utilities::Eye)eye,
+                                    !useDoubleWide && view.subImage.imageRect.offset.x == 0 &&
+                                        view.subImage.imageRect.offset.y == 0 &&
+                                        view.subImage.imageRect.extent.width == image.appTexture->getInfo().width &&
+                                        view.subImage.imageRect.extent.height == image.appTexture->getInfo().height);
                             }
                             swapchainState.registeredWithFrameAnalyzer = true;
                         }

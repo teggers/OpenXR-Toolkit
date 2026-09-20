@@ -25,6 +25,7 @@
 #include "factories.h"
 #include "interfaces.h"
 #include "log.h"
+#include "eye_target_tracker.h"
 
 namespace {
 
@@ -43,14 +44,68 @@ namespace {
                       FrameAnalyzerHeuristic heuristic)
             : m_configManager(configManager), m_device(graphicsDevice), m_displayWidth(displayWidth),
               m_displayHeight(displayHeight), m_forceHeuristic(heuristic) {
+            if (m_device->getApi() == Api::D3D11) {
+                m_lmuMode = std::clamp(m_configManager->getValue("lmu_eye_target_mode"), 0, 2);
+            }
+            if (m_lmuMode) {
+                Log("LMU eye-target experiment v1: mode=%d (1=observe, 2=apply); restart to change mode\n", m_lmuMode);
+            }
         }
 
-        void registerColorSwapchainImage(XrSwapchain swapchain, std::shared_ptr<ITexture> source, Eye eye) override {
+        void registerColorSwapchainImage(XrSwapchain swapchain,
+                                         std::shared_ptr<ITexture> source,
+                                         Eye eye,
+                                         bool wholeEye) override {
             m_eyeSwapchain[(int)eye].insert(swapchain);
             m_eyeSwapchainImages[(int)eye].insert(source->getNativePtr());
+            if (m_lmuMode && wholeEye && source->getInfo().arraySize == 1) {
+                m_lmuRoots[swapchain].emplace_back(source, eye);
+                m_lmuTracker.registerEye(resourceId(source), toOwnership(eye));
+                Log("LMU eye root: texture=%p eye=%d size=%ux%u samples=%u\n",
+                    source->getNativePtr(), (int)eye, source->getInfo().width, source->getInfo().height,
+                    source->getInfo().sampleCount);
+            }
+        }
+
+        void unregisterColorSwapchain(XrSwapchain swapchain) override {
+            if (!m_lmuMode) {
+                return;
+            }
+            const auto found = m_lmuRoots.find(swapchain);
+            if (found != m_lmuRoots.end()) {
+                for (const auto& image : found->second) {
+                    m_eyeSwapchainImages[(int)image.second].erase(image.first->getNativePtr());
+                }
+                m_lmuRoots.erase(found);
+            }
+            for (auto& swapchains : m_eyeSwapchain) {
+                swapchains.erase(swapchain);
+            }
+            // Release retained images and discard all learned native identities on recreation.
+            m_lmuCurrentTextures.clear();
+            m_lmuPreviousTextures.clear();
+            m_lmuTracker = EyeTargetTracker{};
+            m_lmuHint.reset();
+            for (const auto& entry : m_lmuRoots) {
+                for (const auto& image : entry.second) {
+                    m_lmuTracker.registerEye(resourceId(image.first), toOwnership(image.second));
+                }
+            }
+        }
+
+        bool requiresKnownEye() const override {
+            return m_lmuMode == 2;
         }
 
         void resetForFrame() override {
+            if (m_lmuMode) {
+                m_lmuTracker.beginFrame();
+                m_lmuCurrentTextures.clear();
+                m_lmuHint.reset();
+                m_lmuHits = {};
+                m_lmuResolves = 0;
+                ++m_lmuFrame;
+            }
             m_hasSeenLeftEye = m_hasSeenRightEye = false;
             m_hasCopiedLeftEye = m_hasCopiedRightEye = false;
 
@@ -63,6 +118,18 @@ namespace {
         }
 
         void prepareForEndFrame() override {
+            if (m_lmuMode) {
+                m_lmuTracker.endFrame();
+                // Keep the resources behind every learned native pointer alive until the
+                // next completed frame. This prevents pointer reuse from misidentifying an eye.
+                m_lmuPreviousTextures = std::move(m_lmuCurrentTextures);
+                if (m_lmuFrame <= 6 || (m_lmuFrame % 300) == 0) {
+                    Log("LMU eye frame=%llu mode=%d copies=%zu resolves=%u learned=%zu bindL=%u bindR=%u unknown=%u overflow=%d\n",
+                        (unsigned long long)m_lmuFrame, m_lmuMode, m_lmuTracker.transferCount(), m_lmuResolves,
+                        m_lmuTracker.learnedCount(), m_lmuHits[0], m_lmuHits[1], m_lmuHits[2],
+                        (int)m_lmuTracker.overflowed());
+                }
+            }
             if (m_heuristic == FrameAnalyzerHeuristic::Unknown) {
                 if (m_hasSeenLeftEye && m_hasSeenRightEye &&
                     (m_forceHeuristic == FrameAnalyzerHeuristic::ForwardRender ||
@@ -92,6 +159,26 @@ namespace {
 
         void onSetRenderTarget(std::shared_ptr<graphics::IContext> context,
                                std::shared_ptr<ITexture> renderTarget) override {
+            if (m_lmuMode) {
+                m_lmuHint.reset();
+                if (renderTarget->getInfo().arraySize == 1 && renderTarget->getInfo().mipCount == 1 &&
+                    context->getAs<D3D11>()->GetType() == D3D11_DEVICE_CONTEXT_IMMEDIATE) {
+                    const auto ownership = m_lmuTracker.eyeFor(resourceId(renderTarget));
+                    if (ownership == EyeTargetTracker::Left || ownership == EyeTargetTracker::Right) {
+                        m_lmuHint = ownership == EyeTargetTracker::Left ? Eye::Left : Eye::Right;
+                    }
+                }
+                ++m_lmuHits[m_lmuHint ? (int)*m_lmuHint : 2];
+                TraceLoggingWrite(g_traceProvider, "LMU_EyeTargetBind",
+                                  TLPArg(renderTarget->getNativePtr(), "Texture"),
+                                  TLArg(m_lmuHint ? (int)*m_lmuHint : -1, "LearnedEye"));
+                if (m_lmuHint && m_lmuBindLogBudget) {
+                    --m_lmuBindLogBudget;
+                    Log("LMU eye bind: texture=%p eye=%d size=%ux%u samples=%u\n",
+                        renderTarget->getNativePtr(), (int)*m_lmuHint, renderTarget->getInfo().width,
+                        renderTarget->getInfo().height, renderTarget->getInfo().sampleCount);
+                }
+            }
             const auto& info = renderTarget->getInfo();
             if (info.arraySize != 1) {
                 return;
@@ -117,7 +204,32 @@ namespace {
         void onCopyTexture(std::shared_ptr<ITexture> source,
                            std::shared_ptr<ITexture> destination,
                            int sourceSlice = -1,
-                           int destinationSlice = -1) override {
+                           int destinationSlice = -1,
+                           bool wholeImage = false,
+                           bool resolve = false) override {
+            if (m_lmuMode) {
+                m_lmuResolves += resolve;
+                TraceLoggingWrite(g_traceProvider, "LMU_EyeTargetTransfer",
+                                  TLPArg(source->getNativePtr(), "Source"),
+                                  TLPArg(destination->getNativePtr(), "Destination"),
+                                  TLArg(wholeImage, "WholeImage"), TLArg(resolve, "Resolve"));
+                if (m_lmuTracker.transfer(resourceId(source), resourceId(destination), wholeImage)) {
+                    m_lmuCurrentTextures[resourceId(source)] = source;
+                    m_lmuCurrentTextures[resourceId(destination)] = destination;
+                }
+                if (m_lmuTransferLogBudget) {
+                    --m_lmuTransferLogBudget;
+                    Log("LMU eye transfer: %s source=%p destination=%p whole=%d src=%ux%u/%u dst=%ux%u/%u sub=%d:%d\n",
+                        resolve ? "resolve" : "copy", source->getNativePtr(), destination->getNativePtr(),
+                        (int)wholeImage, source->getInfo().width, source->getInfo().height, source->getInfo().sampleCount,
+                        destination->getInfo().width, destination->getInfo().height,
+                        destination->getInfo().sampleCount, sourceSlice, destinationSlice);
+                }
+            }
+            // Observing resolves must not change the stock copy-order heuristic in mode 1.
+            if (resolve) {
+                return;
+            }
             if (destination->getInfo().arraySize != 1) {
                 return;
             }
@@ -180,6 +292,9 @@ namespace {
         }
 
         std::optional<Eye> getEyeHint() const override {
+            if (requiresKnownEye()) {
+                return m_lmuHint;
+            }
             if (!m_isPredictionValid) {
                 return std::nullopt;
             }
@@ -191,6 +306,26 @@ namespace {
         }
 
       private:
+        static EyeTargetTracker::Resource resourceId(const std::shared_ptr<ITexture>& texture) {
+            return reinterpret_cast<EyeTargetTracker::Resource>(texture->getNativePtr());
+        }
+
+        static EyeTargetTracker::Ownership toOwnership(Eye eye) {
+            return eye == Eye::Left ? EyeTargetTracker::Left : EyeTargetTracker::Right;
+        }
+
+        int m_lmuMode{0};
+        EyeTargetTracker m_lmuTracker;
+        std::optional<Eye> m_lmuHint;
+        std::map<XrSwapchain, std::vector<std::pair<std::shared_ptr<ITexture>, Eye>>> m_lmuRoots;
+        std::map<EyeTargetTracker::Resource, std::shared_ptr<ITexture>> m_lmuCurrentTextures;
+        std::map<EyeTargetTracker::Resource, std::shared_ptr<ITexture>> m_lmuPreviousTextures;
+        uint64_t m_lmuFrame{0};
+        std::array<uint32_t, 3> m_lmuHits{};
+        uint32_t m_lmuResolves{0};
+        uint32_t m_lmuTransferLogBudget{80};
+        uint32_t m_lmuBindLogBudget{40};
+
         const std::shared_ptr<IConfigManager> m_configManager;
         const std::shared_ptr<IDevice> m_device;
         const uint32_t m_displayWidth;

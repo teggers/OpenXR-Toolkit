@@ -657,7 +657,9 @@ namespace toolkit {
                                                         std::shared_ptr<ITexture> /* source */,
                                                         std::shared_ptr<ITexture> /* destination */,
                                                         int /* sourceSlice */,
-                                                        int /* destinationSlice */)>;
+                                                        int /* destinationSlice */,
+                                                        bool /* wholeImage */,
+                                                        bool /* resolve */)>;
             virtual void registerCopyTextureEvent(CopyTextureEvent event) = 0;
 
             virtual void getVRAMUsage(uint64_t& usage, uint8_t& percentUsed) const = 0;
@@ -704,7 +706,11 @@ namespace toolkit {
 
             virtual void registerColorSwapchainImage(XrSwapchain swapchain,
                                                      std::shared_ptr<ITexture> source,
-                                                     utilities::Eye eye) = 0;
+                                                     utilities::Eye eye,
+                                                     bool wholeEye = true) = 0;
+
+            virtual void unregisterColorSwapchain(XrSwapchain swapchain) = 0;
+            virtual bool requiresKnownEye() const = 0;
 
             virtual void resetForFrame() = 0;
             virtual void prepareForEndFrame() = 0;
@@ -716,7 +722,9 @@ namespace toolkit {
             virtual void onCopyTexture(std::shared_ptr<ITexture> source,
                                        std::shared_ptr<ITexture> destination,
                                        int sourceSlice = -1,
-                                       int destinationSlice = -1) = 0;
+                                       int destinationSlice = -1,
+                                       bool wholeImage = false,
+                                       bool resolve = false) = 0;
 
             virtual void onAcquireSwapchain(XrSwapchain swapchain) = 0;
             virtual void onReleaseSwapchain(XrSwapchain swapchain) = 0;

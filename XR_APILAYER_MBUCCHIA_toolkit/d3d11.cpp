@@ -869,6 +869,7 @@ void main(uint3 id : SV_DispatchThreadID)
             : m_device(device), m_gpuArchitecture(GpuArchitecture::Unknown), m_configManager(configManager),
               m_allowInterceptor(!configManager->isSafeMode() &&
                                  !configManager->getValue(config::SettingDisableInterceptor)),
+              m_lmuTrackEyeTargets(configManager->getValue("lmu_eye_target_mode") > 0),
               m_lateInitCountdown(enableOculusQuirk ? 10 : 0) {
             m_device->GetImmediateContext(set(m_context));
             {
@@ -1629,6 +1630,12 @@ void main(uint3 id : SV_DispatchThreadID)
                                46,
                                hooked_ID3D11DeviceContext_CopySubresourceRegion,
                                g_original_ID3D11DeviceContext_CopySubresourceRegion);
+            if (m_lmuTrackEyeTargets) {
+                DetourMethodAttach(get(m_context),
+                                   57, // ID3D11DeviceContext::ResolveSubresource
+                                   hooked_ID3D11DeviceContext_ResolveSubresource,
+                                   g_original_ID3D11DeviceContext_ResolveSubresource);
+            }
             DetourMethodAttach(get(m_context),
                                // Method offset is 7 + method index (0-based) for ID3D11DeviceContext.
                                10,
@@ -1657,6 +1664,12 @@ void main(uint3 id : SV_DispatchThreadID)
                                46,
                                hooked_ID3D11DeviceContext_CopySubresourceRegion,
                                g_original_ID3D11DeviceContext_CopySubresourceRegion);
+            if (m_lmuTrackEyeTargets) {
+                DetourMethodDetach(get(m_context),
+                                   57,
+                                   hooked_ID3D11DeviceContext_ResolveSubresource,
+                                   g_original_ID3D11DeviceContext_ResolveSubresource);
+            }
             DetourMethodDetach(get(m_context),
                                // Method offset is 7 + method index (0-based) for ID3D11DeviceContext.
                                10,
@@ -1883,7 +1896,10 @@ void main(uint3 id : SV_DispatchThreadID)
                             ID3D11Resource* pSrcResource,
                             ID3D11Resource* pDstResource,
                             UINT SrcSubresource = 0,
-                            UINT DstSubresource = 0) {
+                            UINT DstSubresource = 0,
+                            bool wholeRegion = true,
+                            bool resolve = false,
+                            const D3D11_BOX* sourceBox = nullptr) {
             if (m_blockEvents) {
                 return;
             }
@@ -1920,7 +1936,25 @@ void main(uint3 id : SV_DispatchThreadID)
                                                               destinationTextureDesc,
                                                               get(destinationTexture));
 
-            INVOKE_EVENT(copyTextureEvent, wrappedContext, source, destination, SrcSubresource, DstSubresource);
+            const bool wholeSource = !sourceBox ||
+                                     (sourceBox->left == 0 && sourceBox->top == 0 && sourceBox->front == 0 &&
+                                      sourceBox->right == sourceTextureDesc.Width &&
+                                      sourceBox->bottom == sourceTextureDesc.Height && sourceBox->back == 1);
+            const bool wholeImage = wholeRegion && wholeSource &&
+                                    context->GetType() == D3D11_DEVICE_CONTEXT_IMMEDIATE &&
+                                    SrcSubresource == 0 && DstSubresource == 0 &&
+                                    sourceTextureDesc.ArraySize == 1 && destinationTextureDesc.ArraySize == 1 &&
+                                    sourceTextureDesc.MipLevels == 1 && destinationTextureDesc.MipLevels == 1 &&
+                                    sourceTextureDesc.Width == destinationTextureDesc.Width &&
+                                    sourceTextureDesc.Height == destinationTextureDesc.Height;
+            INVOKE_EVENT(copyTextureEvent,
+                         wrappedContext,
+                         source,
+                         destination,
+                         SrcSubresource,
+                         DstSubresource,
+                         wholeImage,
+                         resolve);
         }
 
 #undef INVOKE_EVENT
@@ -2000,6 +2034,7 @@ void main(uint3 id : SV_DispatchThreadID)
         std::string m_deviceName;
         GpuArchitecture m_gpuArchitecture;
         const bool m_allowInterceptor;
+        const bool m_lmuTrackEyeTargets;
         uint32_t m_lateInitCountdown{0};
 
         ComPtr<ID3D11SamplerState> m_samplers[2];
@@ -2237,13 +2272,36 @@ void main(uint3 id : SV_DispatchThreadID)
                                    TLArg(SrcSubresource, "SrcSubresource"));
 
             assert(g_instance);
-            g_instance->onCopyResource(Context, pSrcResource, pDstResource, SrcSubresource, DstSubresource);
+            g_instance->onCopyResource(Context,
+                                       pSrcResource,
+                                       pDstResource,
+                                       SrcSubresource,
+                                       DstSubresource,
+                                       DstX == 0 && DstY == 0 && DstZ == 0,
+                                       false,
+                                       pSrcBox);
 
             assert(g_original_ID3D11DeviceContext_CopySubresourceRegion);
             g_original_ID3D11DeviceContext_CopySubresourceRegion(
                 Context, pDstResource, DstSubresource, DstX, DstY, DstZ, pSrcResource, SrcSubresource, pSrcBox);
 
             TraceLoggingWriteStop(local, "ID3D11DeviceContext_CopySubresourceRegion");
+        }
+
+        DECLARE_DETOUR_FUNCTION(static void,
+                                STDMETHODCALLTYPE,
+                                ID3D11DeviceContext_ResolveSubresource,
+                                ID3D11DeviceContext* Context,
+                                ID3D11Resource* pDstResource,
+                                UINT DstSubresource,
+                                ID3D11Resource* pSrcResource,
+                                UINT SrcSubresource,
+                                DXGI_FORMAT Format) {
+            assert(g_instance);
+            g_instance->onCopyResource(Context, pSrcResource, pDstResource, SrcSubresource, DstSubresource, true, true);
+            assert(g_original_ID3D11DeviceContext_ResolveSubresource);
+            g_original_ID3D11DeviceContext_ResolveSubresource(
+                Context, pDstResource, DstSubresource, pSrcResource, SrcSubresource, Format);
         }
 
         DECLARE_DETOUR_FUNCTION(static void,

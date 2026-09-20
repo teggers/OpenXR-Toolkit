@@ -216,8 +216,9 @@ namespace {
       private:
         std::optional<int> readRegistry(const std::string& name) const {
             auto value = RegGetDword(HKEY_CURRENT_USER, m_baseKey, xr::utf8_to_wide(name));
-            if (!value) {
+            if (!value && name != "lmu_eye_target_mode") {
                 // Fallback to HKLM for global options.
+                // The LMU experiment must be explicitly enabled for one application profile.
                 value = RegGetDword(HKEY_LOCAL_MACHINE, xr::utf8_to_wide(RegPrefix), xr::utf8_to_wide(name));
             }
             return value;
