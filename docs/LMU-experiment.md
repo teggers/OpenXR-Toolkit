@@ -27,7 +27,9 @@ This is intended only for LMU's native D3D11 OpenXR path. No automatic LMU appli
 
 Portable C++ tests have passed on macOS with AddressSanitizer and UndefinedBehaviorSanitizer. Tests cover delayed eye copies, an MSAA-resolve/copy chain, confirmation delay, shared intermediates, partial-copy rejection, cycles, ownership changes, expiry, collection overflow and reset.
 
-**The Windows DLL has not been built here. D3D interception, Windows configuration scripts, and headset behavior have not been runtime-tested.** Synthetic ownership tests do not establish that LMU uses these copy chains.
+**Windows x64 Release build succeeded**, including the ownership tests under MSVC, in [GitHub Actions run 35528743144](https://github.com/teggers/OpenXR-Toolkit/actions/runs/35528743144). Code commit: `e577cfe068c22b8141716532fce31605eebee402`. The downloaded DLL matches the artifact's SHA-256: `28519305b899f8572a9db110e36bb6067cb1bc456393ea72722cda1d83f95888`.
+
+The build script ran successfully on Windows. D3D interception, the registry configuration helper and headset behavior have not been runtime-tested. Synthetic ownership tests do not establish that LMU uses these copy chains. See [the quick-start instructions](LMU-quick-start.md) for the binary test.
 
 ## Build on Windows
 

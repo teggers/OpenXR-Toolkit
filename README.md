@@ -2,7 +2,8 @@
 
 This local branch contains an **experimental LMU eye-target patch** based on 1.3.2.
 Read [the experiment notes](docs/LMU-experiment.md) for scope, build instructions and test modes.
-It is not an official release or a confirmed fix; Windows/headset validation remains outstanding.
+The Windows DLL builds successfully and the ownership tests pass. It is not an official release
+or a confirmed fix; LMU/headset validation remains outstanding.
 
 This software provides a collection of useful features to customize and improve existing OpenXR applications,
 including render upscaling and sharpening, foveated rendering, hand tracking to controller input simulation,
