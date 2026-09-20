@@ -3,7 +3,7 @@
 Based on official Toolkit **1.3.2**, commit `c568a3cdb8f12c355f4d1b23a795663202a5c8a7`.
 This is an experimental source patch with user-reported success for LMU eye alignment, not an official Toolkit release. A left-eye-only Toolkit menu remains under investigation.
 
-The current source identifies as **LMU-experiment-2**. It keeps the original eye-target fix and adds [menu diagnostics](LMU-menu-diagnostics.md). The confirmed Windows build and user-reported eye-alignment result below refer to **LMU-experiment-1**; experiment 2 requires its own build and runtime validation.
+The current source identifies as **LMU-experiment-2**. It keeps the original eye-target fix and adds [menu diagnostics](LMU-menu-diagnostics.md). Its [Windows build and ownership tests passed](https://github.com/teggers/OpenXR-Toolkit/actions/runs/35537672929) at code commit `ef86f110eacc10b16ddc48268e57dab65a8721c8`; headset validation is outstanding. The user-reported eye-alignment result below refers to **LMU-experiment-1**.
 
 The menu symptom has now been clarified: its right-eye copy is present but displaced far left, with only an edge visible. Adjusting the separate legacy-menu offset and inspecting the logged layout are the next placement checks.
 

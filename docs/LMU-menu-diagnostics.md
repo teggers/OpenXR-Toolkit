@@ -2,11 +2,19 @@
 
 This build keeps the eye-target mapping that the user reports fixes both-eye gaze alignment in native OpenXR LMU. It adds bounded ordinary-log diagnostics for the left-eye-only Toolkit menu. It is **not a confirmed menu fix**.
 
+The Windows x64 Release build and ownership tests passed in [run 35537672929](https://github.com/teggers/OpenXR-Toolkit/actions/runs/35537672929). [Download its DLL package](https://github.com/teggers/OpenXR-Toolkit/actions/runs/35537672929/artifacts/10613189458). The artifact is named `OpenXR-Toolkit-LMU-experiment-3` because this was CI run number 3; the DLL identifies as **LMU-experiment-2**. Source commit: `ef86f110eacc10b16ddc48268e57dab65a8721c8`. DLL SHA-256: `99f87c18bffaad958074ddf33f5d1ba6ec3f8e6f1aff61ec17e22cd6ec8f6a7e`. This diagnostic DLL has not yet been tested in the headset.
+
 The Companion visibility control, an explicit native-profile `menu_eye=0`, and switching the legacy menu option have not resolved the reported symptom. The user subsequently clarified that the **right-eye menu is present but displaced far left**, with only its edge visible. The exact direction of the legacy-menu switch and the FPS overlay's right-eye visibility are not yet confirmed.
 
 ## Placement check with the existing DLL
 
 With **Use legacy menu → Yes**, decrease **Menu eye offset** in steps of 250 pixels (for example, 0 → -250 → -500). Toolkit subtracts this value from its computed right-eye position, so decreasing it moves that menu to the right. Record the initial and final values. This setting affects menu/overlay placement, not gaze or the foveation masks. If the control cannot produce comfortable alignment, restore the initial value and capture the diagnostic log below. No automatic correction or exact offset has been established yet.
+
+## Separate right-eye flicker comparison
+
+The user also reports slightly greater text flicker in the right eye when looking at a fixed point. This observation does not establish incorrect depth. The eye-target patch changes mask selection without changing gaze projection, eye poses or depth-buffer contents.
+
+First compare the same stationary cockpit text with **Foveated rendering → Off**, keeping mode 2, MSAA, resolution and other settings unchanged. If the extra flicker disappears, compare foveation with eye tracking disabled to separate moving-mask effects from fixed-mask/shading behavior. If it remains with foveation off, investigate the rendering baseline and other Toolkit processing before attributing it to gaze. No comparison result or flicker fix is confirmed yet.
 
 ## Install and capture one short run
 
