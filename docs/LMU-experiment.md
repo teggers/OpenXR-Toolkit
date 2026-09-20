@@ -1,7 +1,9 @@
-# LMU eye-target experiment 1
+# LMU eye-target experiment
 
 Based on official Toolkit **1.3.2**, commit `c568a3cdb8f12c355f4d1b23a795663202a5c8a7`.
 This is an experimental source patch with user-reported success for LMU eye alignment, not an official Toolkit release. A left-eye-only Toolkit menu remains under investigation.
+
+The current source identifies as **LMU-experiment-2**. It keeps the original eye-target fix and adds [menu diagnostics](LMU-menu-diagnostics.md). The confirmed Windows build and user-reported eye-alignment result below refer to **LMU-experiment-1**; experiment 2 requires its own build and runtime validation.
 
 ## Reason for this experiment
 
@@ -31,7 +33,7 @@ Portable C++ tests have passed on macOS with AddressSanitizer and UndefinedBehav
 
 The build script ran successfully on Windows. The user subsequently tested the DLL in native OpenXR LMU with `lmu_eye_target_mode=2` and reports that foveation works and both eyes track correctly with eye tracking enabled. This is a user-reported headset result, not an independently captured trace or performance benchmark. The precise intermediate copy sequence and registry helper execution remain unverified. See [the quick-start instructions](LMU-quick-start.md) for installation and testing.
 
-The same test reports the Toolkit menu visible only in the left eye. The menu has a separate `menu_eye` setting (0=both, 1=left, 2=right), exposed globally by the desktop Companion's **In-headset menu visibility** control. A per-application HKCU value overrides that global HKLM setting. Checking these settings is the next diagnostic; the menu issue is not yet attributed to configuration, the patch or the runtime. Toolkit normally submits the menu as a quad layer after disabling VRS, independently of the scene-target eye prediction. Legacy menu mode instead draws into the submitted eye images.
+The same test reports the Toolkit menu visible only in the left eye. The menu has a separate `menu_eye` setting (0=both, 1=left, 2=right), exposed globally by the desktop Companion's **In-headset menu visibility** control. A per-application HKCU value overrides that global HKLM setting. The user has now tested Both eyes in Companion, native-profile `menu_eye=0`, and switching the legacy-menu option without improvement. The exact legacy switch direction remains unconfirmed. Toolkit normally submits the menu as a quad layer after disabling VRS, independently of the scene-target eye prediction. Legacy menu mode instead draws into the submitted eye images. The diagnostic build records both paths rather than assuming which setting or target was active.
 
 ## Build on Windows
 

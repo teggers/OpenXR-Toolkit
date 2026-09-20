@@ -371,6 +371,23 @@ namespace {
 
             const float fontSize = m_configManager->getValue(SettingMenuFontSize) * 0.75f; // pt -> px
 
+            if (m_configManager->peekValue("lmu_eye_target_mode") == 2 && m_state == MenuState::Visible &&
+                m_lmuLayoutLogBudget) {
+                // Separate counters let the ordinary log prove that both legacy eye draws reach this code.
+                const size_t index = eye ? (size_t)*eye : utilities::ViewCount;
+                const auto frame = ++m_lmuLayoutFrames[index];
+                if (frame <= 3 || (frame % 300) == 0) {
+                    --m_lmuLayoutLogBudget;
+                    Log("LMU menu layout: eye=%s texture=%p viewport=%dx%d background=%.1fx%.1f "
+                        "left=%.1f top=%.1f center=%.1f right=%.1f eyeOffset=%.1f "
+                        "projX=%.5f,%.5f measureText=%d measureBackground=%d\n",
+                        !eye ? "quad" : *eye == Eye::Left ? "left" : "right", renderTarget->getNativePtr(),
+                        viewportSize.width, viewportSize.height, m_menuBackgroundWidth, m_menuBackgroundHeight,
+                        leftAlign, topAlign, centerAlign, rightAlign, eyeOffset,
+                        m_projCenter[0].x, m_projCenter[1].x, (int)m_resetTextLayout, (int)m_resetBackgroundLayout);
+                }
+            }
+
             const double timeouts[to_integral(MenuTimeout::MaxValue)] = {3.0, 12.0, 60.0, INFINITY};
             const double timeout =
                 m_state == MenuState::Splash ? INFINITY : timeouts[m_configManager->getValue(SettingMenuTimeout)];
@@ -2206,6 +2223,8 @@ namespace {
         mutable float m_menuHeaderHeight{0.0f};
         mutable bool m_resetTextLayout{true};
         mutable bool m_resetBackgroundLayout{true};
+        mutable uint32_t m_lmuLayoutLogBudget{40};
+        mutable std::array<uint32_t, utilities::ViewCount + 1> m_lmuLayoutFrames{};
     };
 
     template <typename E>

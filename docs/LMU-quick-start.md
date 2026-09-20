@@ -1,5 +1,7 @@
 # Test the LMU experimental DLL
 
+These instructions describe the first working eye-target build, **LMU-experiment-1**. For the newer build investigating the left-eye-only menu, use [the menu diagnostic guide](LMU-menu-diagnostics.md).
+
 The Windows build and ownership tests passed. One user reports that mode 2 corrects foveation and gaze alignment in both eyes in native OpenXR LMU. A left-eye-only Toolkit menu remains under investigation; performance and broader stability have not been validated.
 It is based on official OpenXR Toolkit 1.3.2 and is intended for an existing 1.3.2 installation.
 

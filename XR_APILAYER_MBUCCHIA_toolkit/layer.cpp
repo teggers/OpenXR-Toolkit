@@ -2625,6 +2625,8 @@ namespace {
             m_graphicsDevice->unsetRenderTargets();
 
             std::shared_ptr<graphics::ITexture> textureForOverlay[utilities::ViewCount] = {};
+            XrSwapchain swapchainForOverlay[utilities::ViewCount] = {};
+            uint32_t imageIndexForOverlay[utilities::ViewCount] = {};
             uint32_t sliceForOverlay[utilities::ViewCount];
             std::shared_ptr<graphics::ITexture> depthForOverlay[utilities::ViewCount] = {};
             xr::math::ViewProjection viewForOverlay[utilities::ViewCount];
@@ -2930,6 +2932,8 @@ namespace {
                         correctedProjectionViews[eye].subImage.imageRect.extent.height = scaledOutputHeight;
 
                         textureForOverlay[eye] = swapchainImages.runtimeTexture;
+                        swapchainForOverlay[eye] = view.subImage.swapchain;
+                        imageIndexForOverlay[eye] = swapchainState.acquiredImageIndex;
                         sliceForOverlay[eye] = view.subImage.imageArrayIndex;
                         depthForOverlay[eye] = depthBuffer;
 
@@ -3037,6 +3041,7 @@ namespace {
 
             // Render our overlays.
             bool needMenuSwapchainDelayedRelease = false;
+            bool logLmuMenu = false;
             {
                 const bool drawHands = m_handTracker && m_configManager->peekEnumValue<config::HandTrackingVisibility>(
                                                             config::SettingHandVisibilityAndSkinTone) !=
@@ -3094,7 +3099,54 @@ namespace {
 
                 // Render the menu.
                 if (m_menuHandler) {
-                    if (!m_configManager->getValue(config::SettingMenuLegacyMode) && !m_configManager->isSafeMode()) {
+                    const bool useLegacyMenu = m_configManager->getValue(config::SettingMenuLegacyMode) ||
+                                               m_configManager->isSafeMode();
+                    if (m_configManager->peekValue("lmu_eye_target_mode") == 2) {
+                        // Ordinary logs should establish the actual menu path without requiring an ETW capture.
+                        // Sample startup, configuration/visibility changes, and a few active frames; bound all output.
+                        const std::array<int, 9> state = {
+                            (int)useLegacyMenu,
+                            (int)m_configManager->isSafeMode(),
+                            m_configManager->peekValue(config::SettingMenuEyeVisibility),
+                            (int)m_menuHandler->isVisible(),
+                            m_configManager->peekValue(config::SettingMenuEyeOffset),
+                            m_configManager->peekValue(config::SettingMenuDistance),
+                            m_configManager->peekValue(config::SettingMenuFontSize),
+                            m_configManager->peekValue(config::SettingOverlayType),
+                            m_configManager->peekValue(config::SettingMenuLegacyMode)};
+                        ++m_lmuMenuFrame;
+                        logLmuMenu = m_lmuMenuLogBudget &&
+                                     (m_lmuMenuFrame <= 3 || state != m_lmuMenuState ||
+                                      (state[3] && (m_lmuMenuFrame % 300) == 0));
+                        m_lmuMenuState = state;
+                        if (logLmuMenu) {
+                            --m_lmuMenuLogBudget;
+                            Log("LMU menu frame=%llu app='%s' path=%s legacy=%d safe=%d menu_eye=%d "
+                                "visible=%d eye_offset=%d distance=%d font=%d overlay=%d layers=%u\n",
+                                (unsigned long long)m_lmuMenuFrame, m_applicationName.c_str(),
+                                useLegacyMenu ? "legacy" : "quad", state[8], state[1], state[2], state[3],
+                                state[4], state[5], state[6], state[7], chainFrameEndInfo.layerCount);
+                            for (uint32_t eye = 0; eye < utilities::ViewCount; ++eye) {
+                                if (!textureForOverlay[eye]) {
+                                    Log("LMU menu target: eye=%u missing\n", eye);
+                                    continue;
+                                }
+                                const auto& info = textureForOverlay[eye]->getInfo();
+                                const auto& viewport = viewportForOverlay[eye];
+                                const auto& fov = viewForOverlay[eye].Fov;
+                                Log("LMU menu target: eye=%u swapchain=%p image=%u texture=%p slice=%u "
+                                    "size=%ux%u array=%u samples=%u viewport=%d,%d/%dx%d "
+                                    "fov=%.5f,%.5f,%.5f,%.5f\n",
+                                    eye, swapchainForOverlay[eye], imageIndexForOverlay[eye],
+                                    textureForOverlay[eye]->getNativePtr(), sliceForOverlay[eye],
+                                    info.width, info.height, info.arraySize, info.sampleCount,
+                                    viewport.offset.x, viewport.offset.y, viewport.extent.width,
+                                    viewport.extent.height, fov.angleLeft, fov.angleRight,
+                                    fov.angleUp, fov.angleDown);
+                            }
+                        }
+                    }
+                    if (!useLegacyMenu) {
                         if (m_menuHandler->isVisible() || m_menuLingering) {
                             TraceLoggingWrite(g_traceProvider, "OverlayMenu");
 
@@ -3139,8 +3191,8 @@ namespace {
                             static const XrEyeVisibility visibility[] = {
                                 XR_EYE_VISIBILITY_BOTH, XR_EYE_VISIBILITY_LEFT, XR_EYE_VISIBILITY_RIGHT};
                             layerQuadForMenu.eyeVisibility =
-                                visibility[std::min(m_configManager->getValue(config::SettingMenuEyeVisibility),
-                                                    (int)std::size(visibility))];
+                                visibility[std::clamp(m_configManager->getValue(config::SettingMenuEyeVisibility),
+                                                     0, (int)std::size(visibility) - 1)];
                             layerQuadForMenu.subImage.swapchain = m_menuSwapchain;
                             layerQuadForMenu.subImage.imageRect.extent.width = textureInfo.width;
                             layerQuadForMenu.subImage.imageRect.extent.height = textureInfo.height;
@@ -3165,6 +3217,13 @@ namespace {
 
                             correctedLayers.push_back(
                                 reinterpret_cast<XrCompositionLayerBaseHeader*>(&layerQuadForMenu));
+                            if (logLmuMenu) {
+                                Log("LMU menu quad: eyeVisibility=%s swapchain=%p image=%u texture=%p "
+                                    "size=%ux%u layerIndex=%zu\n",
+                                    xr::ToCString(layerQuadForMenu.eyeVisibility), m_menuSwapchain, menuImageIndex,
+                                    m_menuSwapchainImages[menuImageIndex]->getNativePtr(),
+                                    textureInfo.width, textureInfo.height, correctedLayers.size() - 1);
+                            }
                         }
                     } else {
                         // Legacy menu mode, for people having problems.
@@ -3183,6 +3242,11 @@ namespace {
                                 m_graphicsDevice->beginText(true /* mustKeepOldContent */);
                                 m_menuHandler->render(textureForOverlay[eye], (utilities::Eye)eye);
                                 m_graphicsDevice->flushText();
+                                if (logLmuMenu) {
+                                    Log("LMU menu legacy draw: eye=%u texture=%p slice=%d\n", eye,
+                                        textureForOverlay[eye]->getNativePtr(),
+                                        useTextureArrays ? (int)sliceForOverlay[eye] : -1);
+                                }
                             }
 
                             m_graphicsDevice->unsetRenderTargets();
@@ -3273,6 +3337,10 @@ namespace {
                 }
 
                 const auto result = OpenXrApi::xrEndFrame(session, &chainFrameEndInfo);
+                if (logLmuMenu) {
+                    Log("LMU menu submit: frame=%llu layers=%u result=%d\n",
+                        (unsigned long long)m_lmuMenuFrame, chainFrameEndInfo.layerCount, (int)result);
+                }
 
                 m_graphicsDevice->unblockCallbacks();
 
@@ -3468,6 +3536,9 @@ namespace {
         std::vector<std::shared_ptr<graphics::ITexture>> m_menuSwapchainImages;
         std::shared_ptr<menu::IMenuHandler> m_menuHandler;
         int m_menuLingering{0};
+        uint64_t m_lmuMenuFrame{0};
+        uint32_t m_lmuMenuLogBudget{60};
+        std::array<int, 9> m_lmuMenuState{};
         bool m_requestScreenShotKeyState{false};
 
         struct {

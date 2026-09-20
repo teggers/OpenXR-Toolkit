@@ -39,6 +39,7 @@ jobs:
           Copy-Item bin/x64/Release/XR_APILAYER_MBUCCHIA_toolkit.dll artifact/
           Copy-Item bin/x64/Release/XR_APILAYER_MBUCCHIA_toolkit.pdb artifact/
           Copy-Item docs/LMU-experiment.md artifact/README.md
+          Copy-Item docs/LMU-menu-diagnostics.md artifact/START-HERE.md
           Copy-Item scripts/Set-LmuEyeTargetMode.ps1 artifact/
           Copy-Item LICENSE artifact/
           Copy-Item version.info artifact/
