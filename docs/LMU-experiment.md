@@ -19,6 +19,7 @@ Toolkit's existing analyzer switches its eye prediction when an image is copied 
 - Apply mode uses the learned eye and disables VRS for unrecognized targets. It does not substitute the static generic mask or guess that every unknown target is left-eye.
 - Bounded logs/ETW diagnostics. Resource tracking is limited to 128 resources and 256 transfer events per frame; overflow invalidates the frame's learned mapping. Resources can be retained for one additional frame, increasing transient VRAM use.
 - Default behavior is stock. The experiment has no HKLM/global setting fallback and must be explicitly enabled in the selected application's HKCU profile. Restart the game between modes.
+- Build compatibility: the existing hand-joint cache uses `std::array` instead of a raw array inside `std::pair`, allowing the modern MSVC standard library to move/assign deque entries. The OpenXR joint-buffer interface remains unchanged.
 
 This is intended only for LMU's native D3D11 OpenXR path. No automatic LMU application-name guess is used: its exact OpenXR profile name must come from the log. Do not enable it in an OpenComposite profile or another game.
 
