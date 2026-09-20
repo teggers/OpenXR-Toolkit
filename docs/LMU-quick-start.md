@@ -1,6 +1,6 @@
 # Test the LMU experimental DLL
 
-The Windows build and ownership tests passed. This DLL has **not** yet been validated in LMU.
+The Windows build and ownership tests passed. One user reports that mode 2 corrects foveation and gaze alignment in both eyes in native OpenXR LMU. A left-eye-only Toolkit menu remains under investigation; performance and broader stability have not been validated.
 It is based on official OpenXR Toolkit 1.3.2 and is intended for an existing 1.3.2 installation.
 
 Download the `OpenXR-Toolkit-LMU-experiment-2` artifact from:
@@ -37,6 +37,12 @@ First repeat the eye-identity test while stationary: Custom foveation, expert se
 If foveation disappears entirely, that is **not success**: this experiment deliberately leaves unknown targets at full shading rather than selecting a guessed eye. Save the log; its `learned`, `bindL`, `bindR`, `unknown`, and `overflow` fields help show whether LMU's rendering layout was recognized. Capture a short Toolkit trace if the ordinary log is insufficient.
 
 After the fixed masks work correctly, eye tracking can be restored and tested separately. Correct masks alone do not prove an FPS improvement.
+
+## If the Toolkit menu appears in only one eye
+
+The desktop OpenXR Toolkit Companion app has an **In-headset menu visibility** control. Select **Both eyes**, then restart LMU. This control writes a global setting; an existing per-application override takes precedence.
+
+If the control already says Both eyes, close LMU and set DWORD (32-bit) `menu_eye` to `0` in the same native LMU registry profile used for `lmu_eye_target_mode`. Keep `lmu_eye_target_mode=2` and the working foveation settings unchanged. Values are 0=both eyes, 1=left only and 2=right only. This is a diagnostic configuration check, not a confirmed solution to the reported menu issue.
 
 ## Roll back
 

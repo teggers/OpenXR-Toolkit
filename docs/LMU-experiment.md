@@ -1,7 +1,7 @@
 # LMU eye-target experiment 1
 
 Based on official Toolkit **1.3.2**, commit `c568a3cdb8f12c355f4d1b23a795663202a5c8a7`.
-This is an experimental source patch, not a confirmed LMU fix or an official Toolkit release.
+This is an experimental source patch with user-reported success for LMU eye alignment, not an official Toolkit release. A left-eye-only Toolkit menu remains under investigation.
 
 ## Reason for this experiment
 
@@ -29,7 +29,9 @@ Portable C++ tests have passed on macOS with AddressSanitizer and UndefinedBehav
 
 **Windows x64 Release build succeeded**, including the ownership tests under MSVC, in [GitHub Actions run 35528743144](https://github.com/teggers/OpenXR-Toolkit/actions/runs/35528743144). Code commit: `e577cfe068c22b8141716532fce31605eebee402`. The downloaded DLL matches the artifact's SHA-256: `28519305b899f8572a9db110e36bb6067cb1bc456393ea72722cda1d83f95888`.
 
-The build script ran successfully on Windows. D3D interception, the registry configuration helper and headset behavior have not been runtime-tested. Synthetic ownership tests do not establish that LMU uses these copy chains. See [the quick-start instructions](LMU-quick-start.md) for the binary test.
+The build script ran successfully on Windows. The user subsequently tested the DLL in native OpenXR LMU with `lmu_eye_target_mode=2` and reports that foveation works and both eyes track correctly with eye tracking enabled. This is a user-reported headset result, not an independently captured trace or performance benchmark. The precise intermediate copy sequence and registry helper execution remain unverified. See [the quick-start instructions](LMU-quick-start.md) for installation and testing.
+
+The same test reports the Toolkit menu visible only in the left eye. The menu has a separate `menu_eye` setting (0=both, 1=left, 2=right), exposed globally by the desktop Companion's **In-headset menu visibility** control. A per-application HKCU value overrides that global HKLM setting. Checking these settings is the next diagnostic; the menu issue is not yet attributed to configuration, the patch or the runtime. Toolkit normally submits the menu as a quad layer after disabling VRS, independently of the scene-target eye prediction. Legacy menu mode instead draws into the submitted eye images.
 
 ## Build on Windows
 
